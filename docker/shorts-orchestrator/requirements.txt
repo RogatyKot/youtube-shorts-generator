@@ -1,0 +1,1 @@
+flask==2.2.5 google-cloud-storage==2.11.0 moviepy==1.0.5 gTTS==2.3.1

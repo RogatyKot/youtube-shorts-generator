@@ -1,0 +1,47 @@
+name: Build & Deploy to GCP
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK (gcloud)
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Configure Docker for Artifact Registry (optional)
+        run: |
+          if [ -n "${{ secrets.ARTIFACT_REGISTRY_REPO }}" ]; then
+            gcloud auth configure-docker ${ { secrets.GCP_REGION } }-docker.pkg.dev --quiet || true
+          else
+            gcloud auth configure-docker --quiet
+          fi
+
+      - name: Build & Push Docker images
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+          ARTIFACT_REGISTRY_LOCATION: ${{ secrets.GCP_REGION }}
+        run: |
+          bash ./scripts/build_and_push.sh ${{ secrets.GCP_PROJECT_ID }} ${{ secrets.ARTIFACT_REGISTRY_REPO }} ${{ secrets.GCP_REGION }}
+
+      - name: Terraform Init & Apply
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          bash ./scripts/terraform_apply.sh ${{ secrets.GCP_PROJECT_ID }} ${{ secrets.GCP_REGION }}
